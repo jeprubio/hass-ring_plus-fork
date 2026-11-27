@@ -100,6 +100,9 @@ Entity names follow the device name from your Ring app. Diagnostic entities are 
   *AC power*, *Siren*, camera *Motion* / *Ding* / *Light* / *External power*
 - `sensor`: *Battery*, *Wi-Fi signal*, *Last motion*, *Last ding*, hub *Firmware* / *Power source* / …
 - `camera`: snapshot image (not a live stream)
+- `siren`: *Siren* on the alarm panel (sound or silence it)
+- `event`: *Arming blocked* on the alarm panel. It fires `not_ready` when the keypad or app asks
+  to bypass open sensors, with the attributes `mode` (`home`/`away`) and `sensors` (their names)
 
 ## Troubleshooting
 

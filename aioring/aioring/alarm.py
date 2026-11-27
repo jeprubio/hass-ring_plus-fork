@@ -20,6 +20,8 @@ from .exceptions import RingError
 _LOGGER = logging.getLogger(__name__)
 
 UpdateCallback = Callable[[], None]
+# (zid, impulse_type, data), e.g. ("panel-zid", "security-panel.not-ready", {"devices": [...]})
+ImpulseCallback = Callable[[str, str, dict[str, Any]], None]
 
 
 class RingAlarmConnection:
@@ -31,6 +33,7 @@ class RingAlarmConnection:
         self.asset_id: str | None = None
         self.connected = False
         self._listeners: list[UpdateCallback] = []
+        self._impulse_listeners: list[ImpulseCallback] = []
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._task: asyncio.Task | None = None
         self._seq = 1
@@ -39,6 +42,11 @@ class RingAlarmConnection:
     def add_listener(self, cb: UpdateCallback) -> Callable[[], None]:
         self._listeners.append(cb)
         return lambda: self._listeners.remove(cb)
+
+    def add_impulse_listener(self, cb: ImpulseCallback) -> Callable[[], None]:
+        """Listen for one-off device events (impulses) such as a blocked arm attempt."""
+        self._impulse_listeners.append(cb)
+        return lambda: self._impulse_listeners.remove(cb)
 
     def _notify(self) -> None:
         for cb in list(self._listeners):
@@ -98,19 +106,26 @@ class RingAlarmConnection:
 
     def _handle(self, channel: str | None, msg: Any) -> bool:
         """Process a message. Returns True if we should reconnect."""
-        _LOGGER.debug("Ring alarm message on %s: %s", channel, msg)
         if not isinstance(msg, dict):
             return False
         if msg.get("datatype") == "HubDisconnectionEventType":
             return True
         if msg.get("msg") == "DeviceInfoDocGetList" or (
                 channel == "DataUpdate" and msg.get("datatype") == "DeviceInfoDocType"):
+            impulses = []
             for doc in msg.get("body") or []:
                 state = flatten_doc(doc)
                 if zid := state.get("zid"):
                     self.devices.setdefault(zid, {}).update(state)
+                    if channel == "DataUpdate":
+                        impulses += [(zid, i["impulseType"], i.get("data") or {})
+                                     for i in (doc.get("impulse") or {}).get("v1") or []
+                                     if isinstance(i, dict) and i.get("impulseType")]
             self._ready.set()
             self._notify()
+            for impulse in impulses:
+                for cb in list(self._impulse_listeners):
+                    cb(*impulse)
         return False
 
     async def _send(self, message: dict[str, Any]) -> None:
