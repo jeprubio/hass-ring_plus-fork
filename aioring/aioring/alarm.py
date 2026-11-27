@@ -98,6 +98,7 @@ class RingAlarmConnection:
 
     def _handle(self, channel: str | None, msg: Any) -> bool:
         """Process a message. Returns True if we should reconnect."""
+        _LOGGER.debug("Ring alarm message on %s: %s", channel, msg)
         if not isinstance(msg, dict):
             return False
         if msg.get("datatype") == "HubDisconnectionEventType":
