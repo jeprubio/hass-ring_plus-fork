@@ -18,3 +18,4 @@ jobs:
         with:
           files: dist/ring_plus.zip
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
